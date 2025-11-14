@@ -1,0 +1,15 @@
+{
+  "resourceName": "mydropboxstorage",
+  "policyUUID": "e3f5d42f",
+  "bucketName": "mydropbox-dev-bucket",
+  "storageAccess": "authAndGuest",
+  "guestAccess": [
+    "READ"
+  ],
+  "authAccess": [
+    "CREATE_AND_UPDATE",
+    "READ",
+    "DELETE"
+  ],
+  "groupAccess": {}
+}
