@@ -30,7 +30,7 @@ function LandingPage({ showSignIn }) {
     {
       name: 'Standard',
       storage: '105 GB',
-      price: '€9.99/month'
+      price: '€9.99/month',
       features: ['All Free features', 'Increased storage', 'Priority support'],
       buttonText: 'Choose Standard'
     },

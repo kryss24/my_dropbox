@@ -4,14 +4,10 @@ import { Hub } from 'aws-amplify/utils';
 import { getCurrentUser } from 'aws-amplify/auth';
 import App from './App';
 import LandingPage from './LandingPage';
-import SignIn from './SignIn'; // Import the SignIn component
+import SignIn from './SignIn';
+import ProfilePage from './ProfilePage'; // Import ProfilePage
 import amplifyconfig from './amplifyconfiguration.json';
 
-// Configure Amplify and provide Storage settings under the Storage key.
-// The installed @aws-amplify/storage package exposes modular functions
-// (list, uploadData, downloadData, remove, etc.) which we import where
-// needed. Amplify still reads a Storage section from its configuration
-// to determine S3 bucket/region.
 Amplify.configure({
   ...amplifyconfig,
   Storage: {
@@ -26,13 +22,14 @@ function AppWrapper() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState('landing'); // landing, signIn, app
+  const [currentAppView, setCurrentAppView] = useState('dropbox'); // 'dropbox' or 'profile'
 
   useEffect(() => {
     const checkUser = async () => {
       try {
         const authUser = await getCurrentUser();
         setUser(authUser);
-        setCurrentView('app');
+        setCurrentView('app'); // This means a user is logged in
       } catch (error) {
         setUser(null);
         setCurrentView('landing');
@@ -48,10 +45,12 @@ function AppWrapper() {
         case 'signedIn':
           setUser(data.payload.data);
           setCurrentView('app');
+          setCurrentAppView('dropbox'); // Reset to dropbox view on sign in
           break;
         case 'signOut':
           setUser(null);
           setCurrentView('landing');
+          setCurrentAppView('dropbox'); // Reset view on sign out
           break;
         default:
           break;
@@ -66,7 +65,11 @@ function AppWrapper() {
   }
 
   if (user) {
-    return <App user={user} />;
+    if (currentAppView === 'dropbox') {
+      return <App user={user} onNavigate={setCurrentAppView} />;
+    } else if (currentAppView === 'profile') {
+      return <ProfilePage user={user} onNavigate={setCurrentAppView} />;
+    }
   }
 
   if (currentView === 'signIn') {
