@@ -43,6 +43,12 @@ import {
   History as HistoryIcon
 } from '@mui/icons-material';
 import { fetchAuthSession, signOut as amplifySignOut } from 'aws-amplify/auth';
+import CreateFolderModal from './components/modals/CreateFolderModal';
+import FilePreviewModal from './components/modals/FilePreviewModal';
+import ShareLinkModal from './components/modals/ShareLinkModal';
+import VersioningInfoModal from './components/modals/VersioningInfoModal';
+import FileList from './components/FileList';
+import FileActions from './components/FileActions';
 
 function App({ user, onNavigate }) {
   const [allFiles, setAllFiles] = useState([]);
@@ -188,7 +194,7 @@ function App({ user, onNavigate }) {
     setError(null);
     setUploadProgress(0);
     const filePath = `protected/${identityId}/${currentPath}${file.name}`;
-    
+    console.log(filePath);
     try {
       const uploadTask = uploadData({
         path: filePath,
@@ -244,28 +250,35 @@ function App({ user, onNavigate }) {
   }
 
   async function handlePreview(fileKey, fileType, fileName) {
-    setLoadingPreview(true);
-    setError(null);
-    setPreviewFileName(fileName);
-    try {
-      const result = await downloadData({ path: fileKey });
-      if (!result.body) {
-        // Handle case for empty files - show a message instead of trying to preview
-        setError('This file is empty and cannot be previewed.');
-        return; 
-      }
-      const blob = await result.body.blob();
-      const url = URL.createObjectURL(blob);
-      setPreviewContentUrl(url);
-      setPreviewContentType(fileType);
-      setPreviewModalOpen(true);
-    } catch (err) {
-      console.error('Error creating preview:', err);
-      setError('Failed to create preview.');
-    } finally {
-      setLoadingPreview(false);
+  setLoadingPreview(true);
+  setError(null);
+  setPreviewFileName(fileName);
+  try {
+    // Lancer le téléchargement
+    const task = downloadData({ path: fileKey });
+
+    // Attendre le résultat réel
+    const result = await task.result;
+    console.log("Preview download result:", result);
+
+    if (!result.body) {
+      setError('This file is empty and cannot be previewed.');
+      return; 
     }
+
+    const blob = await result.body.blob();
+    const url = URL.createObjectURL(blob);
+    setPreviewContentUrl(url);
+    setPreviewContentType(fileType);
+    setPreviewModalOpen(true);
+  } catch (err) {
+    console.error('Error creating preview:', err);
+    setError('Failed to create preview.');
+  } finally {
+    setLoadingPreview(false);
   }
+}
+
 
   const handleClosePreviewModal = () => {
     if (previewContentUrl) {
@@ -278,22 +291,36 @@ function App({ user, onNavigate }) {
   };
 
   async function downloadFile(fileKey) {
-    setError(null);
-    try {
-      const result = await downloadData({ path: fileKey });
-      const blob = await result.body.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileKey.split('/').pop();
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(a.href); // Clean up the object URL immediately after download
-    } catch (err) {
-      console.error('Error downloading file:', err);
-      setError('Failed to download file.');
+  setError(null);
+  try {
+    console.log("Download key:", fileKey);
+    const task = downloadData({ path: fileKey });
+    
+    const result = await task.result; // <- ATTENTION ici
+    console.log("Download result: ", result);
+
+    let blob;
+    if (!result.body) {
+      blob = new Blob([''], { type: 'application/octet-stream' });
+    } else {
+      blob = await result.body.blob();
     }
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileKey.split('/').pop();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+
+  } catch (err) {
+    console.error('Error downloading file:', err);
+    setError('Failed to download file.');
   }
+}
+
+
 
   async function deleteItem(itemPath, isFolder = false) {
     setError(null);
@@ -430,33 +457,13 @@ function App({ user, onNavigate }) {
         <Grid container spacing={3} sx={{ mt: 2 }}>
             <Grid item xs={12}>
                 <Box sx={{ p: 3, border: '1px solid #ccc', borderRadius: '8px' }}>
-                <Flex justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                    <Breadcrumbs aria-label="breadcrumb">
-                    {breadcrumbParts.map((part, index) => (
-                        <Link
-                        key={index}
-                        underline="hover"
-                        color={index === breadcrumbParts.length - 1 ? "text.primary" : "inherit"}
-                        href="#"
-                        onClick={(e) => { e.preventDefault(); handleBreadcrumbClick(index); }}
-                        >
-                        {part}
-                        </Link>
-                    ))}
-                    </Breadcrumbs>
-                    <Flex>
-                        <Tooltip title="Create Folder">
-                            <IconButton onClick={() => setCreateFolderModalOpen(true)}>
-                                <CreateNewFolderIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Upload File">
-                            <IconButton onClick={() => fileInputRef.current.click()} disabled={uploading}>
-                                <CloudUploadIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Flex>
-                </Flex>
+                <FileActions
+                  breadcrumbParts={breadcrumbParts}
+                  handleBreadcrumbClick={handleBreadcrumbClick}
+                  setCreateFolderModalOpen={setCreateFolderModalOpen}
+                  fileInputRef={fileInputRef}
+                  uploading={uploading}
+                />
 
                 {uploading && (
                     <Box sx={{ mb: 2 }}>
@@ -465,250 +472,59 @@ function App({ user, onNavigate }) {
                     </Box>
                 )}
 
-                {loading ? (
-                    <CircularProgress />
-                ) : (folders.length === 0 && files.length === 0) ? (
-                    <Box sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
-                        <Typography variant="h6" gutterBottom>
-                            No files or folders here yet!
-                        </Typography>
-                        <Typography variant="body1">
-                            Upload your first file or create a new folder to get started.
-                        </Typography>
-                    </Box>
-                ) : (
-                    <List>
-                    {/* Render Folders */}
-                    {folders.map((folderName) => (
-                        <ListItem
-                            key={folderName}
-                            onDoubleClick={() => handleFolderClick(folderName)}
-                            sx={{ cursor: 'pointer' }}
-                            secondaryAction={
-                                <IconButton edge="end" aria-label="delete" onClick={(e) => {
-                                    e.stopPropagation(); // Prevent folder navigation
-                                    const folderPath = `protected/${identityId}/${currentPath}${folderName}/`;
-                                    deleteItem(folderPath, true);
-                                }}>
-                                    <DeleteIcon />
-                                </IconButton>
-                            }
-                        >
-                            <FolderIcon sx={{ mr: 2 }} />
-                            <ListItemText primary={folderName} />
-                        </ListItem>
-                    ))}
-
-                    {/* Render Files */}
-                    {files.map((file) => (
-                        <ListItem
-                        key={file.path}
-                        onClick={() => handlePreview(file.path, file.fileType, file.displayName)} // Preview on click
-                        secondaryAction={
-                            <Flex>
-                            <IconButton edge="end" aria-label="download" onClick={(e) => {
-                                e.stopPropagation(); // Prevent preview
-                                downloadFile(file.path);
-                            }}>
-                                <DownloadIcon />
-                            </IconButton>
-                            <IconButton edge="end" aria-label="share" onClick={(e) => {
-                                e.stopPropagation(); // Prevent preview
-                                handleOpenShareLinkModal(file.path);
-                            }}>
-                                <ShareIcon />
-                            </IconButton>
-                            <IconButton edge="end" aria-label="versions" onClick={(e) => {
-                                e.stopPropagation(); // Prevent preview
-                                handleOpenVersioningModal(file.path, file.displayName);
-                            }}>
-                                <HistoryIcon />
-                            </IconButton>
-                            <IconButton edge="end" aria-label="delete" onClick={(e) => {
-                                e.stopPropagation(); // Prevent preview
-                                deleteItem(file.path);
-                            }}>
-                                <DeleteIcon />
-                            </IconButton>
-                            </Flex>
-                        }
-                        sx={{ cursor: 'pointer' }}
-                        >
-                        {file.fileType.startsWith('image/') ? (
-                            <Image sx={{ mr: 2 }} />
-                        ) : file.fileType === 'application/pdf' ? (
-                            <PictureAsPdfIcon sx={{ mr: 2 }} />
-                        ) : (
-                            <FileIcon sx={{ mr: 2 }} />
-                        )}
-                        <ListItemText 
-                            primary={file.displayName} 
-                            secondary={file.size ? `Size: ${(file.size / 1024).toFixed(2)} KB` : ''} 
-                        />
-                        </ListItem>
-                    ))}
-                    </List>
-                )}
+                <FileList
+                  loading={loading}
+                  folders={folders}
+                  files={files}
+                  identityId={identityId}
+                  currentPath={currentPath}
+                  handleFolderClick={handleFolderClick}
+                  handlePreview={handlePreview}
+                  handleOpenShareLinkModal={handleOpenShareLinkModal}
+                  handleOpenVersioningModal={handleOpenVersioningModal}
+                  downloadFile={downloadFile}
+                  deleteItem={deleteItem}
+                />
                 </Box>
             </Grid>
         </Grid>
       </Container>
 
-      {/* Create Folder Modal */}
-      <Dialog open={isCreateFolderModalOpen} onClose={() => setCreateFolderModalOpen(false)}>
-        <DialogTitle>Create New Folder</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Folder Name"
-            type="text"
-            fullWidth
-            variant="standard"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && createFolder()}
-            disabled={creatingFolder}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateFolderModalOpen(false)}>Cancel</Button>
-          <Button onClick={createFolder} disabled={creatingFolder}>
-            {creatingFolder ? <CircularProgress size={24} /> : "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CreateFolderModal
+        open={isCreateFolderModalOpen}
+        onClose={() => setCreateFolderModalOpen(false)}
+        onCreate={createFolder}
+        newFolderName={newFolderName}
+        setNewFolderName={setNewFolderName}
+        creatingFolder={creatingFolder}
+      />
 
-      {/* File Preview Modal */}
-      <Dialog open={isPreviewModalOpen} onClose={handleClosePreviewModal} maxWidth="md" fullWidth>
-        <DialogTitle>{previewFileName}
-            <IconButton
-                aria-label="close"
-                onClick={handleClosePreviewModal}
-                sx={{
-                    position: 'absolute',
-                    right: 8,
-                    top: 8,
-                    color: (theme) => theme.palette.grey[500],
-                }}
-            >
-                <CloseIcon />
-            </IconButton>
-        </DialogTitle>
-        <DialogContent dividers sx={{ minHeight: '400px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          {loadingPreview ? (
-            <CircularProgress />
-          ) : previewContentUrl && previewContentType ? (
-            previewContentType.startsWith('image/') ? (
-              <img src={previewContentUrl} alt={previewFileName} style={{ maxWidth: '100%', maxHeight: 'calc(100vh - 200px)', objectFit: 'contain' }} />
-            ) : previewContentType === 'application/pdf' ? (
-              <iframe src={previewContentUrl} title={previewFileName} width="100%" height="500px" style={{ border: 'none' }}></iframe>
-            ) : (
-              <Text>Preview not available for this file type.</Text>
-            )
-          ) : (
-            <Text>No content to preview.</Text>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClosePreviewModal}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <FilePreviewModal
+        open={isPreviewModalOpen}
+        onClose={handleClosePreviewModal}
+        fileName={previewFileName}
+        contentType={previewContentType}
+        contentUrl={previewContentUrl}
+        loading={loadingPreview}
+      />
 
-      {/* Share Link Modal */}
-      <Dialog open={isShareLinkModalOpen} onClose={handleCloseShareLinkModal}>
-        <DialogTitle>Share File
-          <IconButton
-            aria-label="close"
-            onClick={handleCloseShareLinkModal}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: 8,
-              color: (theme) => theme.palette.grey[500],
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="subtitle1" gutterBottom>
-            Generate a shareable link for: {sharingFileKey.split('/').pop()}
-          </Typography>
-          <TextField
-            label="Link expires in (hours)"
-            type="number"
-            value={shareExpirationHours}
-            onChange={(e) => setShareExpirationHours(Math.max(1, parseInt(e.target.value) || 1))}
-            fullWidth
-            margin="normal"
-            InputProps={{ inputProps: { min: 1 } }}
-            disabled={generatingShareLink}
-          />
-          <Button
-            variant="contained"
-            onClick={generateShareableLink}
-            disabled={generatingShareLink || !sharingFileKey}
-            sx={{ mt: 2 }}
-            startIcon={generatingShareLink ? <CircularProgress size={20} /> : null}
-          >
-            {generatingShareLink ? 'Generating...' : 'Generate Link'}
-          </Button>
+      <ShareLinkModal
+        open={isShareLinkModalOpen}
+        onClose={handleCloseShareLinkModal}
+        fileName={sharingFileKey.split('/').pop()}
+        expirationHours={shareExpirationHours}
+        setExpirationHours={setShareExpirationHours}
+        generating={generatingShareLink}
+        onGenerate={generateShareableLink}
+        sharedLink={sharedLink}
+        onCopy={handleCopyLink}
+      />
 
-          {sharedLink && (
-            <Box sx={{ mt: 3 }}>
-              <TextField
-                label="Shareable Link"
-                value={sharedLink}
-                fullWidth
-                margin="normal"
-                InputProps={{ readOnly: true }}
-                variant="outlined"
-              />
-              <Button
-                variant="outlined"
-                onClick={handleCopyLink}
-                startIcon={<ContentCopyIcon />}
-                sx={{ mt: 1 }}
-              >
-                Copy Link
-              </Button>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseShareLinkModal}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* File Versioning Modal */}
-      <Dialog open={isVersioningModalOpen} onClose={handleCloseVersioningModal} maxWidth="sm" fullWidth>
-        <DialogTitle>File Versions for {versioningFileName}
-          <IconButton
-            aria-label="close"
-            onClick={handleCloseVersioningModal}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: 8,
-              color: (theme) => theme.palette.grey[500],
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body1" gutterBottom>
-            Implementing a full versioning system with UI for browsing and restoring previous versions requires direct AWS SDK calls or a backend service (e.g., AWS Lambda) to interact with S3's versioning API. This functionality is beyond the scope of this frontend-only implementation using `aws-amplify/storage`'s high-level API.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            To enable S3 bucket versioning, this must be configured in your AWS S3 bucket settings or via Amplify overrides. Once enabled, the versions are managed by S3 automatically.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseVersioningModal}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <VersioningInfoModal
+        open={isVersioningModalOpen}
+        onClose={handleCloseVersioningModal}
+        fileName={versioningFileName}
+      />
 
       <Snackbar
         open={snackbarOpen}

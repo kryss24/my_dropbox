@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { fetchUserAttributes, updateUserAttribute } from 'aws-amplify/auth';
+import { Flex } from '@aws-amplify/ui-react';
 import {
   Container,
   Typography,
